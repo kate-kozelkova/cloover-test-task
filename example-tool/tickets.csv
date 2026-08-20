@@ -1,0 +1,6 @@
+id,subject,status,priority
+101,Login button unresponsive,open,urgent
+102,Typo on pricing page,open,low
+103,Export CSV missing rows,closed,medium
+104,Cannot reset password,open,urgent
+105,Feature request: dark mode,open,low
