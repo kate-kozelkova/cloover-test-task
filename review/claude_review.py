@@ -148,13 +148,19 @@ def _parse_llm_output(data):
 
 def _mock_review(scanner_findings):
     """Offline stand-in so the pipeline is runnable without spending a real
-    API call (e.g. exploring this repo without a key configured). Clearly
-    labeled, and confidence is capped low enough that the router will never
-    let a MOCK review authorize an auto-merge on its own."""
+    API call (e.g. exploring this repo without a key configured). Confidence
+    defaults low enough that the router will never let a MOCK review
+    authorize an auto-merge on its own - that's the real behavior when the
+    LLM step is unavailable, not a demo simplification.
+
+    REVIEW_MOCK_CONFIDENCE lets you override that for a *demo* of the
+    Tier-0 happy path without spending a real API call. It only exists for
+    that purpose - CI always has a real key and never reads this."""
+    confidence = float(os.environ.get("REVIEW_MOCK_CONFIDENCE", "0.4"))
     summary = (
         "[MOCK REVIEW - no ANTHROPIC_API_KEY set] This is a placeholder, "
         "not a real Claude verdict. In any real run (CI or with a key "
         "exported locally) this calls Claude and returns an actual "
         "structured review."
     )
-    return [], 0.4, summary
+    return [], confidence, summary
