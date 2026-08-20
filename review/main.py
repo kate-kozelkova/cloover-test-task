@@ -52,15 +52,19 @@ def run_local(args):
 def run_action(args):
     repo = os.environ["GITHUB_REPOSITORY"]
     token = os.environ["GITHUB_TOKEN"]
-    sha = os.environ["GITHUB_SHA"]
 
     with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
         event = json.load(f)
     pr = event["pull_request"]
     pr_number = pr["number"]
+    sha = pr["head"]["sha"]  # status belongs on the PR's commit, not main's
 
+    # Diffed explicitly against the PR's head SHA, not local HEAD - this
+    # job runs from main's checkout of review/ (see workflow comment), so
+    # HEAD here is main, not the PR branch.
     base_ref = f"origin/{pr['base']['ref']}"
-    diff_text = git_diff(base_ref, "HEAD")
+    head_sha = pr["head"]["sha"]
+    diff_text = git_diff(base_ref, head_sha)
 
     config = load_config()
     result = run_review(diff_text, config, api_key=os.environ.get("ANTHROPIC_API_KEY"))

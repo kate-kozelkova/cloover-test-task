@@ -16,7 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # need full history for a base...head diff
+          # Full history so `git diff base...head` works, and we check out
+          # main's HEAD (not the PR merge ref) deliberately - see
+          # review/scanners.py::scan_self_modification. The review pipeline
+          # that runs should never be the PR's own (possibly tampered) copy.
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch PR head for diffing
+        run: git fetch origin ${{ github.event.pull_request.head.sha }}
 
       - uses: actions/setup-python@v5
         with:
