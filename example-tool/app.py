@@ -16,9 +16,13 @@ def load_tickets(path):
 
 def summarize(tickets):
     open_count = sum(1 for t in tickets if t["status"] == "open")
+    closed_count = sum(1 for t in tickets if t["status"] == "closed")
     urgent = [t for t in tickets if t["priority"] == "urgent"]
 
-    lines = [f"*Daily ticket digest* — {len(tickets)} tickets, {open_count} open"]
+    lines = [
+        f"*Daily ticket digest* — {len(tickets)} tickets, "
+        f"{open_count} open, {closed_count} closed today"
+    ]
     for t in urgent:
         lines.append(f"- URGENT: {t['subject']} (#{t['id']})")
     return "\n".join(lines)
