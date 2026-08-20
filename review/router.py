@@ -50,7 +50,12 @@ def render_report(tier, reason, findings, llm_summary, llm_confidence):
     if findings:
         lines.append("**Findings:**")
         for f in sorted(findings, key=lambda x: -x.severity):
-            loc = f" (`{f.file}:{f.line}`)" if f.file else ""
+            if f.file and f.line is not None:
+                loc = f" (`{f.file}:{f.line}`)"
+            elif f.file:
+                loc = f" (`{f.file}`)"
+            else:
+                loc = ""
             block = " 🚫 hard-block" if f.hard_block else ""
             lines.append(f"- **[{f.severity.name}]** {f.category}{block}: {f.message}{loc}")
         lines.append("")
