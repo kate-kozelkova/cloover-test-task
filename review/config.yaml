@@ -28,5 +28,5 @@ hard_block_categories:
 #   only LOW/MEDIUM severity, no hard_block findings, LLM confidence high.
 # Tier 2 (human review): anything else - HIGH severity, any hard_block
 #   category, low LLM confidence, or a scanner error.
-tier1_max_severity: MEDIUM
+tier1_max_severity: HIGH
 llm_min_confidence_for_auto: 0.85
