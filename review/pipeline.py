@@ -20,9 +20,16 @@ def run_review(diff_text, config, api_key=None):
         scanner_findings = []
         llm_findings, llm_confidence, llm_summary = [], 0.0, f"Scanner error: {exc}"
     else:
-        llm_findings, llm_confidence, llm_summary = review_with_claude(
-            diff_text, scanner_findings, api_key=api_key
-        )
+        try:
+            llm_findings, llm_confidence, llm_summary = review_with_claude(
+                diff_text, scanner_findings, api_key=api_key
+            )
+        except Exception as exc:  # noqa: BLE001 - same fail-closed logic as scanners
+            # An API/network failure isn't "no findings" either - it's an
+            # unknown, and it should never crash the whole check. Treat it
+            # like a scanner error: zero confidence, routes to a human.
+            llm_findings, llm_confidence = [], 0.0
+            llm_summary = f"LLM review failed to run: {exc}"
 
     all_findings = scanner_findings + llm_findings
     tier, reason = decide_tier(all_findings, llm_confidence, scan_errored, config)
