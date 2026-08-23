@@ -91,6 +91,8 @@ REVIEW_TOOL = {
 
 def review_with_claude(diff_text, scanner_findings, api_key=None, model=MODEL):
     api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    if api_key:
+        api_key = api_key.strip()  # strips a stray trailing newline in the secret
     if not api_key:
         return _mock_review(scanner_findings)
 
