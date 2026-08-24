@@ -1,8 +1,8 @@
 """Entrypoint. Two modes:
 
 - Local (default, or --local): diff two git refs, print the report,
-  exit 0 for Tier 0 and 1 for Tier 1/2. Useful for demoing the pipeline
-  or running it as a plain pre-merge gate outside GitHub Actions.
+  exit 0 if it auto-merges, 1 if it needs a human. Useful for demoing the
+  pipeline or running it as a plain pre-merge gate outside GitHub Actions.
 - Action mode (--action): reads the standard GITHUB_* env vars that
   actions/checkout + the pull_request trigger provide, and in addition
   to printing the report, posts a PR comment, sets a commit status, and

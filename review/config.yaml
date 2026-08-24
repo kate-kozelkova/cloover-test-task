@@ -1,6 +1,7 @@
 # Allowlists and thresholds for the automated PR review pipeline.
 # Editing this file is itself a change that should route to a human
-# (it's how the safety net could be weakened), see review/router.py.
+# (it's how the safety net could be weakened) - see the README's tradeoffs
+# section for the self-modification gap this leaves open.
 
 allowlisted_dependencies:
   - requests
@@ -14,19 +15,8 @@ allowlisted_egress_hosts:
   - api.slack.com
   - slack.com
 
-# Any finding in these categories is a hard block: always routes to a
-# human, no matter how low the severity the scanner assigns it.
-hard_block_categories:
-  - secret
-  - egress
-  - pii
-  - auth
-
-# Tier thresholds, applied after combining scanner + LLM findings.
-# Tier 0 (auto-merge): no findings at all.
-# Tier 1 (auto-request-changes, bot loop with the builder's Claude Code):
-#   only LOW/MEDIUM severity, no hard_block findings, LLM confidence high.
-# Tier 2 (human review): anything else - HIGH severity, any hard_block
-#   category, low LLM confidence, or a scanner error.
-tier1_max_severity: HIGH
+# Any finding at all routes to a human - the only way to auto-merge is a
+# clean pass with a confident review. This threshold controls that second
+# half: even with zero findings, low reviewer confidence still routes to
+# a human rather than merging on an unsure "looks fine".
 llm_min_confidence_for_auto: 0.85
