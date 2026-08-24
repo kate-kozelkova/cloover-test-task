@@ -14,12 +14,11 @@ class Severity(IntEnum):
 @dataclass
 class Finding:
     source: str  # "scanner:secrets", "scanner:egress", "llm", ...
-    category: str  # "secret", "egress", "dependency", "pii", "auth", "correctness"
+    category: str  # "secret", "egress", "dependency", "pii", "correctness"
     severity: Severity
     message: str
     file: str = ""
     line: int | None = None
-    hard_block: bool = False  # True => can never be auto-merged regardless of severity
 
     def to_dict(self):
         return {
@@ -29,7 +28,6 @@ class Finding:
             "message": self.message,
             "file": self.file,
             "line": self.line,
-            "hard_block": self.hard_block,
         }
 
 

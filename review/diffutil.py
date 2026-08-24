@@ -32,7 +32,3 @@ def iter_added_lines(diff_text):
         else:
             if current_line is not None:
                 current_line += 1
-
-
-def changed_files(diff_text):
-    return sorted({f for f, _, _ in iter_added_lines(diff_text)})

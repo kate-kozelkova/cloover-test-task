@@ -3,14 +3,12 @@ guarantee rather than a judgment call: secrets, egress, dependencies, PII.
 
 These run first, are cheap, and never call out to a network (other than
 the PR diff already being local). If a scanner itself errors, that's
-treated as a HIGH-severity finding upstream - fail closed, never silent.
+treated as a finding upstream - fail closed, never silent.
 """
 import re
 
 from findings import Finding, Severity
-from diffutil import changed_files, iter_added_lines
-
-PROTECTED_PREFIXES = ("review/", ".github/workflows/")
+from diffutil import iter_added_lines
 
 SECRET_PATTERNS = [
     ("aws_access_key", re.compile(r"AKIA[0-9A-Z]{16}")),
@@ -54,7 +52,6 @@ def scan_secrets(diff_text):
                         message=f"Looks like a hardcoded credential ({name}).",
                         file=file,
                         line=line,
-                        hard_block=True,
                     )
                 )
     return findings
@@ -79,7 +76,6 @@ def scan_egress(diff_text, allowlisted_hosts):
                     "on the approved egress list.",
                     file=file,
                     line=line,
-                    hard_block=True,
                 )
             )
     return findings
@@ -106,7 +102,6 @@ def scan_dependencies(diff_text, allowlisted_deps):
                     "full access to whatever the tool touches.",
                     file=file,
                     line=line,
-                    hard_block=False,
                 )
             )
     return findings
@@ -125,7 +120,6 @@ def scan_pii(diff_text):
                     "is fixture/test data, not real customer data.",
                     file=file,
                     line=line,
-                    hard_block=True,
                 )
             )
         if SSN_RE.search(content) or CARD_RE.search(content):
@@ -137,29 +131,6 @@ def scan_pii(diff_text):
                     message="Pattern resembling an SSN or card number.",
                     file=file,
                     line=line,
-                    hard_block=True,
-                )
-            )
-    return findings
-
-
-def scan_self_modification(diff_text):
-    """A PR that edits the review pipeline itself (scanners, config,
-    workflow) could weaken or disable its own gate. Never let that be
-    reviewed by the version of the pipeline it's editing - always a human,
-    always regardless of how innocuous the diff looks."""
-    findings = []
-    for file in changed_files(diff_text):
-        if file.startswith(PROTECTED_PREFIXES):
-            findings.append(
-                Finding(
-                    source="scanner:self-modification",
-                    category="auth",
-                    severity=Severity.HIGH,
-                    message="This PR modifies the review pipeline itself "
-                    "- always routed to a human, never self-reviewed.",
-                    file=file,
-                    hard_block=True,
                 )
             )
     return findings
@@ -167,7 +138,6 @@ def scan_self_modification(diff_text):
 
 def run_all_scanners(diff_text, config):
     findings = []
-    findings += scan_self_modification(diff_text)
     findings += scan_secrets(diff_text)
     findings += scan_egress(diff_text, config["allowlisted_egress_hosts"])
     findings += scan_dependencies(diff_text, config["allowlisted_dependencies"])

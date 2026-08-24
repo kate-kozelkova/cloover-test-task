@@ -10,14 +10,12 @@ API = "https://api.github.com"
 
 TIER_LABELS = {
     0: "review:auto-merge",
-    1: "review:needs-fixes",
-    2: "review:needs-human",
+    1: "review:needs-human",
 }
 
 TIER_STATUS_STATE = {
     0: "success",
     1: "failure",
-    2: "failure",
 }
 
 

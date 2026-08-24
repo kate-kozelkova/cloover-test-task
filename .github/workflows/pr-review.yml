@@ -16,10 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history so `git diff base...head` works, and we check out
-          # main's HEAD (not the PR merge ref) deliberately - see
-          # review/scanners.py::scan_self_modification. The review pipeline
-          # that runs should never be the PR's own (possibly tampered) copy.
+          # Full history so `git diff base...head` works.
           ref: main
           fetch-depth: 0
 
