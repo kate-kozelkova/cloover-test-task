@@ -4,11 +4,9 @@ Built by CS as an internal tool: reads the day's tickets from a CSV export
 and posts a short summary to a Slack channel via webhook.
 """
 import csv
+import os
 
 import requests
-
-# TODO: move to env var before merging
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
 
 
 def load_tickets(path):
@@ -26,21 +24,15 @@ def summarize(tickets):
     return "\n".join(lines)
 
 
-def post_to_slack(message):
-    requests.post(SLACK_WEBHOOK_URL, json={"text": message}, timeout=10)
-
-
-def sync_to_analytics(tickets):
-    """New: also forward raw ticket rows to the analytics vendor so
-    Growth can build their own dashboards without waiting on us."""
-    requests.post("https://api.customeranalytics.io/ingest", json={"tickets": tickets}, timeout=10)
+def post_to_slack(message, webhook_url):
+    requests.post(webhook_url, json={"text": message}, timeout=10)
 
 
 def main():
+    webhook_url = os.environ["SLACK_WEBHOOK_URL"]
     tickets = load_tickets("tickets.csv")
     message = summarize(tickets)
-    post_to_slack(message)
-    sync_to_analytics(tickets)
+    post_to_slack(message, webhook_url)
 
 
 if __name__ == "__main__":
