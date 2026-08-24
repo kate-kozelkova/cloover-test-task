@@ -12,32 +12,20 @@ not a showcase of how elaborate an agentic pipeline could get.
 
 ## The design
 
-```
-PR opened/updated
-   │
-   ├─► Deterministic scanners (review/scanners.py) - fast, no LLM
-   │     • hardcoded secrets/tokens         • new outbound hosts (egress)
-   │     • dependencies not on the allowlist • PII-shaped data (emails, SSNs, cards)
-   │
-   ├─► Claude review (review/claude_review.py) - the judgment layer
-   │     one structured JSON verdict: findings + severity + confidence + a
-   │     plain-language summary for whoever reads it next
-   │
-   └─► Router (review/router.py) - one decision, fail-closed:
+When a PR opens or updates, two checks run against the diff. A set of deterministic
+scanners (`review/scanners.py`) look for hardcoded secrets or tokens, calls to hosts
+outside the egress allowlist, dependencies that aren't approved, and PII-shaped data
+such as emails, SSNs, or card numbers - all fast, no LLM involved. Separately, Claude
+reviews the same diff (`review/claude_review.py`) and returns one structured verdict: a
+list of findings, a confidence score, and a plain-language summary for whoever reads it
+next.
 
-        any finding, any scanner error, or low reviewer confidence
-                              │
-                              ▼
-        Auto-merge only if: zero findings AND confident review
-                              │
-                 ┌────────────┴────────────┐
-                 ▼                         ▼
-        auto-merge, no human       routed to a human, with the
-        involved                    findings + summary attached
-                                     (not a cold diff)
-```
+The router (`review/router.py`) then makes exactly one decision, fail-closed: the PR
+auto-merges only if there are zero findings and the review was confident. Anything else
+- a finding from either source, a scanner error, or low confidence - routes to a human,
+with the findings and summary already attached rather than a cold diff.
 
-Runs as a single GitHub Action (`.github/workflows/pr-review.yml`) on every
+All of this runs as a single GitHub Action (`.github/workflows/pr-review.yml`) on every
 `pull_request` event. No separate service to host, no agent loop, no autonomy - one
 deterministic pass plus one Claude API call per PR.
 
