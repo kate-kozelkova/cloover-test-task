@@ -54,6 +54,31 @@ python main.py --base main --head demo/risky-change
 synthetic diffs (`pytest review/test_pipeline.py`) - no git state, no network, no env
 vars, so the tests can't drift from what the code actually does.
 
+## Deployment
+
+Three one-time settings turn this from a demo into something that actually gates
+merges:
+
+1. **Add the API key.** Repo → Settings → Secrets and variables → Actions → New
+   repository secret → `ANTHROPIC_API_KEY`. Without this, the reviewer falls back to
+   the offline mock described above, and nothing can ever auto-merge.
+2. **Make the check block merges.** Repo → Settings → Branches → branch protection
+   rule for `main` → require status checks to pass → add `pr-review/data-safety`.
+   Without this, the check still runs and reports, but nothing stops a PR from being
+   merged by hand regardless of the result.
+3. **(Optional) Name a human to notify.** Settings → Secrets and variables → Actions →
+   Variables tab → New repository variable → `REVIEWER_GITHUB_USERNAME` → your GitHub
+   username. When a PR needs a human, the pipeline formally requests a review from
+   this person - a real GitHub notification, not just a comment someone might miss.
+   Leave it unset to skip this step.
+
+Once those are set, every PR triggers `.github/workflows/pr-review.yml` on its own. A
+clean, confident review passes the check, and GitHub's native auto-merge (enable it
+per-PR, or repo-wide in Settings → General) merges it with no one involved. Anything
+else fails the check and blocks the merge button, with the findings and Claude's
+summary already posted as a PR comment - and, if step 3 is set, a formal review
+request waiting in the named reviewer's queue.
+
 ## Repo layout
 
 ```
