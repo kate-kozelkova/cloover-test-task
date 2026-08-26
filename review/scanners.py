@@ -5,12 +5,13 @@ These run first, are cheap, and never call out to a network (other than
 the PR diff already being local). If a scanner itself errors, that's
 treated as a finding upstream - fail closed, never silent.
 """
-import ast
 import re
-import subprocess
+
+from pyflakes.api import check as pyflakes_check
 
 from findings import Finding, Severity
 from diffutil import changed_files, iter_added_lines
+from gitutil import show_file
 
 PROTECTED_PREFIXES = ("review/", ".github/workflows/")
 
@@ -163,30 +164,52 @@ def scan_self_modification(diff_text):
     return findings
 
 
-def check_python_syntax(filename, content):
-    """Pure check: does `content` parse as valid Python? An unparseable
-    file will crash the instant it's imported or run - this is the one
-    slice of "does it crash" we can guarantee deterministically, as
-    opposed to logic bugs or bad runtime input, which need either tests
-    (conditional on the builder having written one) or judgment (Claude's
-    opportunistic review) - no static check can promise those."""
-    try:
-        ast.parse(content, filename=filename)
-    except SyntaxError as exc:
-        return Finding(
-            source="scanner:syntax",
-            category="correctness",
-            severity=Severity.HIGH,
-            message=f"Syntax error: {exc.msg} - this file would crash "
-            "immediately on import, before any of its logic runs.",
-            file=filename,
-            line=exc.lineno,
+class _FindingsCollector:
+    """Minimal pyflakes reporter: collects messages instead of printing
+    them, so we can turn them into Findings."""
+
+    def __init__(self):
+        self.messages = []  # list of (lineno, text)
+
+    def unexpectedError(self, filename, msg):
+        self.messages.append((None, f"Could not check {filename}: {msg}"))
+
+    def syntaxError(self, filename, msg, lineno, offset, text):
+        self.messages.append((lineno, f"Syntax error: {msg}"))
+
+    def flake(self, message):
+        self.messages.append((message.lineno, message.message % message.message_args))
+
+
+def check_python_issues(filename, content):
+    """Pure check: runs pyflakes against `content`. Catches everything a
+    bare syntax check did (won't even parse - would crash instantly on
+    import) plus real cross-reference problems: calling something
+    undefined, an import nothing uses (often a sign of an incomplete
+    refactor). Still can't judge whether the logic is *correct* or
+    whether it handles bad runtime input - only whether the file is
+    internally consistent. That's a real, if narrow, hard guarantee;
+    logic correctness stays with tests (conditional on the builder having
+    written one) or Claude's opportunistic judgment."""
+    collector = _FindingsCollector()
+    pyflakes_check(content, filename, collector)
+    findings = []
+    for lineno, text in collector.messages:
+        findings.append(
+            Finding(
+                source="scanner:pyflakes",
+                category="correctness",
+                severity=Severity.HIGH if text.startswith("Syntax error") else Severity.MEDIUM,
+                message=text,
+                file=filename,
+                line=lineno,
+            )
         )
-    return None
+    return findings
 
 
-def scan_syntax_errors(diff_text, head_ref):
-    """Thin git-shelling wrapper around check_python_syntax. Needs each
+def scan_python_issues(diff_text, head_ref):
+    """Thin git-shelling wrapper around check_python_issues. Needs each
     changed file's full content, not just the diff hunk, so it reads the
     PR's actual version via `git show` rather than trusting the working
     tree - in Action mode the working tree is main's checkout, not the
@@ -197,16 +220,10 @@ def scan_syntax_errors(diff_text, head_ref):
     for file in changed_files(diff_text):
         if not file.endswith(".py"):
             continue
-        result = subprocess.run(
-            ["git", "show", f"{head_ref}:{file}"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            continue  # file was deleted in this PR - nothing to parse
-        finding = check_python_syntax(file, result.stdout)
-        if finding:
-            findings.append(finding)
+        content = show_file(head_ref, file)
+        if content is None:
+            continue  # file was deleted in this PR - nothing to check
+        findings.extend(check_python_issues(file, content))
     return findings
 
 
@@ -217,5 +234,5 @@ def run_all_scanners(diff_text, config, head_ref=None):
     findings += scan_egress(diff_text, config["allowlisted_egress_hosts"])
     findings += scan_dependencies(diff_text, config["allowlisted_dependencies"])
     findings += scan_pii(diff_text)
-    findings += scan_syntax_errors(diff_text, head_ref)
+    findings += scan_python_issues(diff_text, head_ref)
     return findings

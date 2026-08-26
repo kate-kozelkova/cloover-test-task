@@ -6,8 +6,9 @@ import yaml
 
 from findings import Finding, Severity
 from router import TIER_AUTO_MERGE, TIER_NEEDS_HUMAN, decide_tier
+from claude_review import format_file_context
 from scanners import (
-    check_python_syntax,
+    check_python_issues,
     scan_dependencies,
     scan_egress,
     scan_pii,
@@ -103,12 +104,30 @@ def test_scan_self_modification_ignores_unrelated_files():
     assert scan_self_modification(diff) == []
 
 
-def test_check_python_syntax_catches_broken_file():
-    finding = check_python_syntax("app.py", "def broken(:\n    pass\n")
-    assert finding is not None
-    assert finding.category == "correctness"
+def test_check_python_issues_catches_broken_syntax():
+    findings = check_python_issues("app.py", "def broken(:\n    pass\n")
+    assert any(f.severity == Severity.HIGH for f in findings)
 
 
-def test_check_python_syntax_allows_valid_file():
-    finding = check_python_syntax("app.py", "def ok():\n    pass\n")
-    assert finding is None
+def test_check_python_issues_allows_clean_file():
+    assert check_python_issues("app.py", "def ok():\n    return 1\n") == []
+
+
+def test_check_python_issues_catches_undefined_name():
+    findings = check_python_issues(
+        "app.py", "def broken():\n    return totally_undefined_name\n"
+    )
+    assert any("undefined name" in f.message for f in findings)
+
+
+# --- LLM prompt context ----------------------------------------------------
+
+
+def test_format_file_context_wraps_each_file():
+    result = format_file_context({"app.py": "print(1)"})
+    assert '<file path="app.py">' in result
+    assert "print(1)" in result
+
+
+def test_format_file_context_empty_when_no_files():
+    assert format_file_context({}) == ""

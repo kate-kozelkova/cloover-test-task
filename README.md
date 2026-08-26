@@ -3,7 +3,7 @@
 ## The design
 
 A set of scanners (`review/scanners.py`) look for credentials, calls to hosts outside the allowed list, unapproved
-dependencies, PII data such as emails, SSNs, or card numbers, edits to the review pipeline itself, and Python files broken enough to not even run. Separately, Claude reviews the same diff (`review/claude_review.py`) and returns one outcome: a list of findings, a confidence score, and a plain summary. The router (`review/router.py`) then makes exactly one decision, fail-closed: the PR auto-merges only if there are zero findings and the review was confident (>0.84). Anything else is routed for a review,
+dependencies, PII data such as emails, SSNs, or card numbers, edits to the review pipeline itself, and Python files with syntax errors or broken references (via `pyflakes` - calling something undefined, an unused import that hints at an incomplete refactor). Separately, Claude reviews the same diff (`review/claude_review.py`), now alongside the full current content of each changed file rather than just the diff hunk, so it can judge whether a change is consistent with the rest of the file it's in - not just safe in isolation. It returns one outcome: a list of findings, a confidence score, and a plain summary. The router (`review/router.py`) then makes exactly one decision, fail-closed: the PR auto-merges only if there are zero findings and the review was confident (>0.84). Anything else is routed for a review,
 with the findings and summary attached. All of this runs as a single GitHub Action (`.github/workflows/pr-review.yml`) on every `pull_request` event.
 
 ## Decision Justification
@@ -70,23 +70,24 @@ until a reviewer overrides it, with the findings and summary attached. If step 3
 - **Shared workflow across repos.** To scale the tool, `review/` should be moved into its own repo - then each project repo's workflow becomes a pointer instead of a local copy. 
 - **Staged rollout.** Safe PR merge is still human-controlled (bot only comments and labels). Test it like this for a week or two, then turn on auto-merge on the false-negative rate is reliable.
 - **Auto-fix for minor findings.** Any finding currently routes to a reviewer (e.g., even a small unapproved dependency). A middle ground would be bot commenting with exactly what's wrong, Claude Code fixing and pushing again, so that human only involved after a second failure to further cut the queue.
-- **Logic bugs and bad runtime input.** The syntax check only catches "this file cannot even run" - it says nothing about whether the logic is right or handles edge cases. Closing that gap for real means either running the project's own tests (conditional on the builder having written one, and only as strong as what it covers) or leaning further on Claude's opportunistic judgment. Left as best-effort for now, matching the brief's "ideally" framing for crash risk.
+- **Logic bugs and bad runtime input.** `pyflakes` catches broken references within a file, and Claude now sees each changed file in full instead of just the diff, so it can reason about consistency with the rest of that file. Neither actually runs the code, so neither can promise the logic is *correct* or that it handles bad input - closing that gap for real still means either tests (conditional on the builder having written one) or leaning further on Claude's judgment. Left as best-effort, matching the brief's "ideally" framing for crash risk.
 
 ## Repo layout
 
 ```
 example-tool/        the internal tool being reviewed (CS ticket digest -> Slack)
 review/               the review pipeline
-  scanners.py           deterministic checks: secrets, egress, deps, PII, self-mod, syntax
-  claude_review.py       the LLM judgment layer
+  scanners.py           deterministic checks: secrets, egress, deps, PII, self-mod, pyflakes
+  claude_review.py       the LLM judgment layer, given the diff + full changed-file content
   router.py               combines both into a decision + renders the report
   pipeline.py               ties the above together (no GitHub-specific I/O)
   main.py                    CLI entrypoint: local mode + GitHub Actions mode
   github_report.py            posts PR comment / status / label / review request
   findings.py                  shared Finding + Severity data model
   diffutil.py                   unified-diff parsing helpers
-  config.yaml                    allowlists + confidence threshold
-  requirements.txt                 anthropic, requests, pyyaml
-  test_pipeline.py                  unit tests over synthetic diffs
+  gitutil.py                     fetches a file's content at a given ref
+  config.yaml                     allowlists + confidence threshold
+  requirements.txt                  anthropic, requests, pyyaml, pyflakes
+  test_pipeline.py                   unit tests over synthetic diffs
 .github/workflows/pr-review.yml   wires main.py --action into pull_request events
 ```

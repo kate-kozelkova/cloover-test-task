@@ -22,7 +22,7 @@ def run_review(diff_text, config, api_key=None, head_ref=None):
     else:
         try:
             llm_findings, llm_confidence, llm_summary = review_with_claude(
-                diff_text, scanner_findings, api_key=api_key
+                diff_text, scanner_findings, api_key=api_key, head_ref=head_ref
             )
         except Exception as exc:  # noqa: BLE001 - same fail-closed logic as scanners
             # An API/network failure isn't "no findings" either - it's an
