@@ -2,21 +2,9 @@
 
 ## The design
 
-When a PR opens/updates, a set of scanners (`review/scanners.py`) look for included
-credentials, calls to hosts outside the allowed list, unapproved dependencies,
-PII-shaped data such as emails, SSNs, or card numbers, edits to the review pipeline
-itself (so a PR can't quietly loosen its own gate), and changed Python files that don't
-even parse (`ast.parse`) - the one slice of "does it crash" that can be guaranteed
-unconditionally, as opposed to logic bugs or bad runtime input, which no static check
-can promise. Separately, Claude reviews the same
-diff (`review/claude_review.py`) and returns one outcome: a list of findings, a
-confidence score, and a plain summary. The router (`review/router.py`) then makes
-exactly one decision, fail-closed: the PR auto-merges only if there are zero findings
-and the review was confident (>0.84). Anything else is routed for a review, with the
-findings and summary attached.
-
-All of this runs as a single GitHub Action (`.github/workflows/pr-review.yml`) on every
-`pull_request` event.
+A set of scanners (`review/scanners.py`) look for credentials, calls to hosts outside the allowed list, unapproved
+dependencies, PII data such as emails, SSNs, or card numbers, and edits to the review pipeline itself. Separately, Claude reviews the same diff (`review/claude_review.py`) and returns one outcome: a list of findings, a confidence score, and a plain summary. The router (`review/router.py`) then makes exactly one decision, fail-closed: the PR auto-merges only if there are zero findings and the review was confident (>0.84). Anything else is routed for a review,
+with the findings and summary attached. All of this runs as a single GitHub Action (`.github/workflows/pr-review.yml`) on every `pull_request` event.
 
 ## Decision Justification
 
