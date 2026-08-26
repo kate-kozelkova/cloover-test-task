@@ -101,13 +101,16 @@ until a reviewer overrides it, with the findings and summary attached. If step 3
 ```
 example-tool/        the internal tool being reviewed (CS ticket digest -> Slack)
 review/               the review pipeline
-  scanners.py           deterministic checks
+  scanners.py           deterministic checks, including the self-modification guard
   claude_review.py       the LLM judgment layer
   router.py               combines both into a decision + renders the report
   pipeline.py               ties the above together (no GitHub-specific I/O)
   main.py                    CLI entrypoint: local mode + GitHub Actions mode
-  github_report.py            posts PR comment / status / label (Action mode only)
-  config.yaml                  allowlists + confidence threshold
-  test_pipeline.py              unit tests over synthetic diffs
+  github_report.py            posts PR comment / status / label / review request
+  findings.py                  shared Finding + Severity data model
+  diffutil.py                   unified-diff parsing helpers
+  config.yaml                    allowlists + confidence threshold
+  requirements.txt                 anthropic, requests, pyyaml
+  test_pipeline.py                  unit tests over synthetic diffs
 .github/workflows/pr-review.yml   two jobs: data-safety review, and each project's own tests
 ```
