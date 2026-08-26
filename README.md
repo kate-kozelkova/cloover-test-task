@@ -72,12 +72,22 @@ merges:
    this person - a real GitHub notification, not just a comment someone might miss.
    Leave it unset to skip this step.
 
-Once those are set, every PR triggers `.github/workflows/pr-review.yml` on its own. A
-clean, confident review passes the check, and GitHub's native auto-merge (enable it
-per-PR, or repo-wide in Settings → General) merges it with no one involved. Anything
-else fails the check and blocks the merge button, with the findings and Claude's
-summary already posted as a PR comment - and, if step 3 is set, a formal review
-request waiting in the named reviewer's queue.
+Once those are set, every PR triggers `.github/workflows/pr-review.yml` automatically -
+not just the two demo branches above, any PR to this repo. To see it work on a change
+of your own: open a PR (any small edit is enough), then check the PR's **Checks** tab
+or the status row at the bottom of the **Conversation** tab. Within a few seconds
+you'll see:
+
+- a comment from the bot with the verdict, Claude's summary, and any findings
+- the `pr-review/data-safety` check, green if it passed or red if it didn't
+- a `review:auto-merge` or `review:needs-human` label on the PR
+
+A clean, confident review passes the check, and GitHub's native auto-merge (enable it
+per-PR, or repo-wide in Settings → General) merges it with no one involved - you'll
+watch the PR merge itself. Anything else fails the check and blocks the merge button
+until a human overrides it, with the findings and summary already posted instead of a
+cold diff - and, if step 3 is set, a formal review request waiting in your queue
+instead of just a comment you might miss.
 
 ## Repo layout
 
