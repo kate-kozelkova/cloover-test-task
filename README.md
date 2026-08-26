@@ -2,9 +2,7 @@
 
 ## The design
 
-A set of scanners (`review/scanners.py`) look for credentials, calls to hosts outside the allowed list, unapproved
-dependencies, PII data such as emails, SSNs, or card numbers, edits to the review pipeline itself, and Python files with syntax errors or broken references (via `pyflakes` - calling something undefined, an unused import that hints at an incomplete refactor). Separately, Claude reviews the same diff (`review/claude_review.py`), now alongside the full current content of each changed file rather than just the diff hunk, so it can judge whether a change is consistent with the rest of the file it's in - not just safe in isolation. It returns one outcome: a list of findings, a confidence score, and a plain summary. The router (`review/router.py`) then makes exactly one decision, fail-closed: the PR auto-merges only if there are zero findings and the review was confident (>0.84). Anything else is routed for a review,
-with the findings and summary attached. All of this runs as a single GitHub Action (`.github/workflows/pr-review.yml`) on every `pull_request` event.
+A set of scanners (`review/scanners.py`) look for credentials, calls to hosts outside the allowed list, unapproved dependencies, PII data such as emails, SSNs, or card numbers, edits to the review pipeline itself, and Python files with syntax errors or broken references via `pyflakes` (calling something undefined, an unused import etc.). Separately, LLM reviews the same diff (`review/claude_review.py`) alongside the full content of a changed file, so it can estimate whether a change is consistent with the rest of the file. It returns its own findings, a confidence score, and a plain summary. The router (`review/router.py`) combines LLM's findings with what the scanners already flagged and makes a decision: the PR auto-merges only if that combined output list is empty and the review is confident (>0.84). Otherwise, it is routed for a review, with all the findings and the summary attached.
 
 ## Decision Justification
 
@@ -18,12 +16,6 @@ the router consumes structured data, never re-interprets free text.
 
 ## Try it
 
-Everything below runs without a real API key - `review/claude_review.py` falls back to
-a clearly-labeled mock verdict when `ANTHROPIC_API_KEY` isn't set, with confidence fixed
-low enough that a mock review can never authorize an auto-merge on its own. That means
-offline runs will always show the "needs human" path - to see an actual auto-merge,
-export a real key or let CI (which always has one) run it for real.
-
 ```bash
 pip install -r review/requirements.txt
 cd review
@@ -33,9 +25,9 @@ Three branches simulate three incoming PRs against `main`:
 
 | Branch | What it does | Result |
 |---|---|---|
-| `demo/safe-change` | adds a "closed today" count to the digest | auto-merge (with a real key; offline mock always says needs-human) |
-| `demo/risky-change` | hardcodes a Slack webhook, calls an unlisted host, adds an unapproved dep, and adds a PII column | needs human - caught by the scanners alone, no key needed |
-| `demo/ambiguous-change` | forwards the entire raw ticket row to Slack instead of the specific fields the alert needs - no secret, no new host, no new dependency, no literal PII string in the diff | needs human, but only if Claude actually notices the scope creep - scanners find nothing here, so this one tests the LLM layer, not the deterministic one |
+| `demo/safe-change` | adds a "closed today" count to the digest | auto-merge |
+| `demo/risky-change` | hardcodes a Slack webhook, calls an unlisted host, adds an unapproved dep, and adds a PII column | needs human |
+| `demo/ambiguous-change` | forwards the entire raw ticket row to Slack instead of the specific fields the alert needs | needs human, but only if LLM actually notices the scope issue. Scanners find nothing here, so this one tests the LLM layer |
 
 ```bash
 python main.py --base main --head demo/safe-change
@@ -70,23 +62,23 @@ until a reviewer overrides it, with the findings and summary attached. If step 3
 - **Shared workflow across repos.** To scale the tool, `review/` should be moved into its own repo - then each project repo's workflow becomes a pointer instead of a local copy. 
 - **Staged rollout.** Safe PR merge is still human-controlled (bot only comments and labels). Test it like this for a week or two, then turn on auto-merge on the false-negative rate is reliable.
 - **Auto-fix for minor findings.** Any finding currently routes to a reviewer (e.g., even a small unapproved dependency). A middle ground would be bot commenting with exactly what's wrong, Claude Code fixing and pushing again, so that human only involved after a second failure to further cut the queue.
-- **Logic bugs and bad runtime input.** `pyflakes` catches broken references within a file, and Claude now sees each changed file in full instead of just the diff, so it can reason about consistency with the rest of that file. Neither actually runs the code, so neither can promise the logic is *correct* or that it handles bad input - closing that gap for real still means either tests (conditional on the builder having written one) or leaning further on Claude's judgment. Left as best-effort, matching the brief's "ideally" framing for crash risk.
+- **Logic bugs and bad runtime input.** `pyflakes` catches broken references within a file, and LLM sees each changed file in full, so it can reason about consistency with the file. However, it doesn't actually run the code and therefore can't promise the logic is correct in practice or that it handles bad input. To close that gap, additional tests or relying further on LLM's judgment is required. 
 
 ## Repo layout
 
 ```
 example-tool/        the internal tool being reviewed (CS ticket digest -> Slack)
 review/               the review pipeline
-  scanners.py           deterministic checks: secrets, egress, deps, PII, self-mod, pyflakes
-  claude_review.py       the LLM judgment layer, given the diff + full changed-file content
-  router.py               combines both into a decision + renders the report
-  pipeline.py               ties the above together (no GitHub-specific I/O)
-  main.py                    CLI entrypoint: local mode + GitHub Actions mode
-  github_report.py            posts PR comment / status / label / review request
-  findings.py                  shared Finding + Severity data model
+  scanners.py           secrets, egress, deps, PII, self-mod, pyflakes checks
+  claude_review.py       the LLM decision layer
+  router.py               combines both into a decision and renders the report
+  pipeline.py               ties the above together 
+  main.py                    CLI entrypoint: local mode and GitHub Actions mode
+  github_report.py            posts PR comment/status/label/review request
+  findings.py                  shared finding and confidence data model
   diffutil.py                   unified-diff parsing helpers
-  gitutil.py                     fetches a file's content at a given ref
-  config.yaml                     allowlists + confidence threshold
+  gitutil.py                     fetches a file's content
+  config.yaml                     allowlists and confidence threshold
   requirements.txt                  anthropic, requests, pyyaml, pyflakes
   test_pipeline.py                   unit tests over synthetic diffs
 .github/workflows/pr-review.yml   wires main.py --action into pull_request events
