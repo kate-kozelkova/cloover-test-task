@@ -1,6 +1,6 @@
 # PR Review Pipeline
 
-## The design
+## Design
 
 A set of scanners (`review/scanners.py`) look for credentials, calls to hosts outside the allowed list, unapproved dependencies, PII data such as emails, SSNs, or card numbers, edits to the review pipeline itself, and Python files with syntax errors or broken references via `pyflakes` (calling something undefined, an unused import etc.). Separately, LLM reviews the same diff (`review/claude_review.py`) alongside the full content of a changed file, so it can estimate whether a change is consistent with the rest of the file. It returns its own findings, a confidence score, and a plain summary. The router (`review/router.py`) combines LLM's findings with what the scanners already flagged and makes a decision: the PR auto-merges only if that combined output list is empty and the review is confident (>0.84). Otherwise, it is routed for a review, with all the findings and the summary attached.
 
@@ -15,6 +15,10 @@ A set of scanners (`review/scanners.py`) look for credentials, calls to hosts ou
 the router consumes structured data, never re-interprets free text.
 
 ## Try it
+
+1. **Add the API key.** Repo -> Settings -> Secrets and variables -> Actions -> New repository secret -> `ANTHROPIC_API_KEY`. Without this, it can never authorize an auto-merge on its own, thanks to the low fixed confidence level. Therefore, offline runs will always show the "needs human" path.
+2. **Make the check block merges.** Repo -> Settings -> Branches -> branch protection rule for `main` -> require status checks to pass -> add `pr-review/data-safety`. Otherwise, the check will still run and report, but nothing will stop a PR from being merged by hand regardless of the result.
+3. **(Optional) Assign a reviewer.** Settings -> Secrets and variables -> Actions -> Variables tab -> New repository variable -> `REVIEWER_GITHUB_USERNAME` -> enter GitHub username. The pipeline formally requests a review from the assigned person.
 
 ```bash
 pip install -r review/requirements.txt
@@ -35,18 +39,7 @@ python main.py --base main --head demo/risky-change
 python main.py --base main --head demo/ambiguous-change
 ```
 
-`review/test_pipeline.py` covers the router's decision logic and each scanner against
-synthetic diffs (`pytest review/test_pipeline.py`) - no git state, no network, no env
-vars, so the tests can't drift from what the code actually does.
-
-## Deployment
-
-Three one-time settings turn this from a demo into something that actually gates
-merges:
-
-1. **Add the API key.** Repo -> Settings -> Secrets and variables -> Actions -> New repository secret -> `ANTHROPIC_API_KEY`. Without this, it can never authorize an auto-merge on its own, thanks to the low fixed confidence level. Therefore, offline runs will always show the "needs human" path.
-2. **Make the check block merges.** Repo -> Settings -> Branches -> branch protection rule for `main` -> require status checks to pass -> add `pr-review/data-safety`. Otherwise, the check will still run and report, but nothing will stop a PR from being merged by hand regardless of the result.
-3. **(Optional) Assign a reviewer.** Settings -> Secrets and variables -> Actions -> Variables tab -> New repository variable -> `REVIEWER_GITHUB_USERNAME` -> enter GitHub username. The pipeline formally requests a review from the assigned person.
+`review/test_pipeline.py` covers the router's decision logic and each scanner against synthetic diffs (`pytest review/test_pipeline.py`) - no git state, no network, no env vars, so the tests can't drift from what the code actually does.
 
 Every PR triggers `.github/workflows/pr-review.yml` automatically. To see it work on your own PR: open a PR, then check the PR's **Checks** tab or the status row at the bottom of the **Conversation** tab. After a review, you'll see:
 
@@ -54,8 +47,7 @@ Every PR triggers `.github/workflows/pr-review.yml` automatically. To see it wor
 - the `pr-review/data-safety` check, green if passed, red if it didn't
 - a `review:auto-merge` or `review:needs-human` label on the PR
 
-A clean, confident review passes the check, and GitHub's native auto-merge merges it automatically. Otherwise, the check fails and blocks the merge button
-until a reviewer overrides it, with the findings and summary attached. If step 3 is set, a review request appears in the reviewer's queue.
+A clean and confident review passes the check, and GitHub merges it. Otherwise, the check fails and blocks the merge until a reviewer overrides it. 
 
 ## Next steps
 
