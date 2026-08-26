@@ -2,18 +2,24 @@
 
 ## The design
 
-When a PR opens/updates, two checks run against the difference. A set of
-scanners (`review/scanners.py`) look for included credentials, calls to hosts
-outside the allowed list, unapproved dependencies, and PII-shaped data
-such as emails, SSNs, or card numbers. Separately, Claude
-reviews the same diff (`review/claude_review.py`) and returns one outcome: a
-list of findings, a confidence score, and a plain summary.
+When a PR opens/updates, two independent checks run.
 
-The router (`review/router.py`) then makes exactly one decision, fail-closed: the PR
-auto-merges only if there are zero findings and the review was confident (>0.84). Anything else
-is routed for a review, with the findings and summary attached.
+The first is data safety - the hard guarantee. A set of scanners (`review/scanners.py`)
+look for included credentials, calls to hosts outside the allowed list, unapproved
+dependencies, PII-shaped data such as emails, SSNs, or card numbers, and edits to the
+review pipeline itself (so a PR can't quietly loosen its own gate). Separately, Claude
+reviews the same diff (`review/claude_review.py`) and returns one outcome: a list of
+findings, a confidence score, and a plain summary. The router (`review/router.py`) then
+makes exactly one decision, fail-closed: the PR auto-merges only if there are zero
+findings and the review was confident (>0.84). Anything else is routed for a review,
+with the findings and summary attached.
 
-All of this runs as a single GitHub Action (`.github/workflows/pr-review.yml`) on every `pull_request` event.
+The second is crash risk - best-effort, not a hard guarantee. If the changed project has
+its own `tests/` directory, the workflow runs it. A test failure blocks the merge the
+same as a data-safety finding does.
+
+Both run as a single GitHub Action (`.github/workflows/pr-review.yml`) on every
+`pull_request` event, as two separate jobs / checks.
 
 ## Decision Justification
 
@@ -59,18 +65,36 @@ vars, so the tests can't drift from what the code actually does.
 Three one-time settings turn this from a demo into something that actually gates
 merges:
 
-1. **Add the API key.** Repo -> Settings -> Secrets and variables -> Actions -> New repository secret -> `ANTHROPIC_API_KEY`. Without this, it can never authorize an auto-merge on its own, thanks to the low fixed confidence fixed level. Therefore, offline runs will always show the "needs human" path.
-2. **Make the check block merges.** Repo -> Settings -> Branches -> branch protection rule for `main` -> require status checks to pass -> add `pr-review/data-safety`. Otherwise, the check will still run and report, but nothing will stop a PR from being merged by hand regardless of the result.
-3. **(Optional) Assign a reviewer.** Settings -> Secrets and variables -> Actions -> Variables tab -> New repository variable -> `REVIEWER_GITHUB_USERNAME` -> enter GitHub username. The pipeline formally requests a review from the assigned personn.
+1. **Add the API key.** Repo -> Settings -> Secrets and variables -> Actions -> New repository secret -> `ANTHROPIC_API_KEY`. Without this, it can never authorize an auto-merge on its own, thanks to the low fixed confidence level. Therefore, offline runs will always show the "needs human" path.
+2. **Make both checks block merges.** Repo -> Settings -> Branches -> branch protection rule for `main` -> require status checks to pass -> add `pr-review/data-safety` and `tool-tests`. Otherwise, both checks will still run and report, but nothing will stop a PR from being merged by hand regardless of the result.
+3. **(Optional) Assign a reviewer.** Settings -> Secrets and variables -> Actions -> Variables tab -> New repository variable -> `REVIEWER_GITHUB_USERNAME` -> enter GitHub username. The pipeline formally requests a review from the assigned person.
 
 Every PR triggers `.github/workflows/pr-review.yml` automatically. To see it work on your own PR: open a PR, then check the PR's **Checks** tab or the status row at the bottom of the **Conversation** tab. After a review, you'll see:
 
 - a comment from the bot with the decision, Claude's summary, and findings
 - the `pr-review/data-safety` check, green if passed, red if it didn't
+- the `tool-tests` check, if the changed project has its own test suite
 - a `review:auto-merge` or `review:needs-human` label on the PR
 
-A clean, confident review passes the check, and GitHub's native auto-merge merges it automatically. Otherwise, the check fails and blocks the merge button
+A clean, confident review passes both checks, and GitHub's native auto-merge merges it automatically. Otherwise, either check can fail and block the merge button
 until a reviewer overrides it, with the findings and summary attached. If step 3 is set, a review request appears in the reviewer's queue.
+
+## Next steps
+
+- **Shared workflow across repos.** Move `review/` into its own repo; each project
+  repo's workflow becomes a `uses:` pointer instead of a local copy. Needed before this
+  covers more than one project.
+- **Staged rollout.** Ship with the merge button still human-controlled (bot only
+  comments + labels) for a week or two, then turn on GitHub's native auto-merge once
+  the false-negative rate is trusted.
+- **Auto-fix tier for minor findings.** Right now any finding routes to a human, even
+  something as small as an unapproved dependency. A middle tier - bot comments with
+  exactly what's wrong, builder's Claude Code fixes and pushes again, human only
+  involved after a second failure - would cut the queue further.
+- **Cross-repo visibility.** Once multiple project repos share the workflow, there's no
+  single view of what's waiting across all of them. A saved GitHub search
+  (`org:cloover is:pr is:open label:review:needs-human`) or a small dashboard would
+  cover it.
 
 ## Repo layout
 
@@ -85,5 +109,5 @@ review/               the review pipeline
   github_report.py            posts PR comment / status / label (Action mode only)
   config.yaml                  allowlists + confidence threshold
   test_pipeline.py              unit tests over synthetic diffs
-.github/workflows/pr-review.yml   wires main.py --action into pull_request events
+.github/workflows/pr-review.yml   two jobs: data-safety review, and each project's own tests
 ```

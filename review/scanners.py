@@ -8,7 +8,9 @@ treated as a finding upstream - fail closed, never silent.
 import re
 
 from findings import Finding, Severity
-from diffutil import iter_added_lines
+from diffutil import changed_files, iter_added_lines
+
+PROTECTED_PREFIXES = ("review/", ".github/workflows/")
 
 SECRET_PATTERNS = [
     ("aws_access_key", re.compile(r"AKIA[0-9A-Z]{16}")),
@@ -136,8 +138,32 @@ def scan_pii(diff_text):
     return findings
 
 
+def scan_self_modification(diff_text):
+    """A PR that edits the review pipeline itself (scanners, config,
+    workflow) could weaken or disable its own gate. Always routed to a
+    human, regardless of how safe the change looks - the pipeline that
+    runs is main's trusted copy (see the workflow's checkout step), not
+    this PR's own, so it can flag edits to itself without being able to
+    approve them away."""
+    findings = []
+    for file in changed_files(diff_text):
+        if file.startswith(PROTECTED_PREFIXES):
+            findings.append(
+                Finding(
+                    source="scanner:self-modification",
+                    category="auth",
+                    severity=Severity.HIGH,
+                    message="This PR modifies the review pipeline itself "
+                    "- always routed to a human, never self-approved.",
+                    file=file,
+                )
+            )
+    return findings
+
+
 def run_all_scanners(diff_text, config):
     findings = []
+    findings += scan_self_modification(diff_text)
     findings += scan_secrets(diff_text)
     findings += scan_egress(diff_text, config["allowlisted_egress_hosts"])
     findings += scan_dependencies(diff_text, config["allowlisted_dependencies"])

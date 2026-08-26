@@ -6,7 +6,13 @@ import yaml
 
 from findings import Finding, Severity
 from router import TIER_AUTO_MERGE, TIER_NEEDS_HUMAN, decide_tier
-from scanners import scan_dependencies, scan_egress, scan_pii, scan_secrets
+from scanners import (
+    scan_dependencies,
+    scan_egress,
+    scan_pii,
+    scan_secrets,
+    scan_self_modification,
+)
 
 with open("config.yaml", encoding="utf-8") as f:
     CONFIG = yaml.safe_load(f)
@@ -77,3 +83,20 @@ def test_scan_pii_catches_email():
     diff = diff_for("tickets.csv", "101,Login issue,open,urgent,j.martinez@customerdomain.com")
     findings = scan_pii(diff)
     assert any(f.category == "pii" for f in findings)
+
+
+def test_scan_self_modification_flags_review_dir_edits():
+    diff = diff_for("review/config.yaml", "llm_min_confidence_for_auto: 0.10")
+    findings = scan_self_modification(diff)
+    assert any(f.category == "auth" for f in findings)
+
+
+def test_scan_self_modification_flags_workflow_edits():
+    diff = diff_for(".github/workflows/pr-review.yml", "on: [push]")
+    findings = scan_self_modification(diff)
+    assert any(f.category == "auth" for f in findings)
+
+
+def test_scan_self_modification_ignores_unrelated_files():
+    diff = diff_for("example-tool/app.py", "print('hello')")
+    assert scan_self_modification(diff) == []
