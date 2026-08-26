@@ -81,20 +81,9 @@ until a reviewer overrides it, with the findings and summary attached. If step 3
 
 ## Next steps
 
-- **Shared workflow across repos.** Move `review/` into its own repo; each project
-  repo's workflow becomes a `uses:` pointer instead of a local copy. Needed before this
-  covers more than one project.
-- **Staged rollout.** Ship with the merge button still human-controlled (bot only
-  comments + labels) for a week or two, then turn on GitHub's native auto-merge once
-  the false-negative rate is trusted.
-- **Auto-fix tier for minor findings.** Right now any finding routes to a human, even
-  something as small as an unapproved dependency. A middle tier - bot comments with
-  exactly what's wrong, builder's Claude Code fixes and pushes again, human only
-  involved after a second failure - would cut the queue further.
-- **Cross-repo visibility.** Once multiple project repos share the workflow, there's no
-  single view of what's waiting across all of them. A saved GitHub search
-  (`org:cloover is:pr is:open label:review:needs-human`) or a small dashboard would
-  cover it.
+- **Shared workflow across repos.** To scale the tool, `review/` should be moved into its own repo - then each project repo's workflow becomes a pointer instead of a local copy. 
+- **Staged rollout.** Safe PR merge is still human-controlled (bot only comments and labels). Test it like this for a week or two, then turn on auto-merge on the false-negative rate is reliable.
+- **Auto-fix for minor findings.** Any finding currently routes to a reviewer (e.g., even a small unapproved dependency). A middle ground would be bot commenting with exactly what's wrong, Claude Code fixing and pushing again, so that human only involved after a second failure to further cut the queue.
 
 ## Repo layout
 
