@@ -44,16 +44,18 @@ pip install -r review/requirements.txt
 cd review
 ```
 
-Two branches simulate two incoming PRs against `main`:
+Three branches simulate three incoming PRs against `main`:
 
 | Branch | What it does | Result |
 |---|---|---|
 | `demo/safe-change` | adds a "closed today" count to the digest | auto-merge (with a real key; offline mock always says needs-human) |
 | `demo/risky-change` | hardcodes a Slack webhook, calls an unlisted host, adds an unapproved dep, and adds a PII column | needs human - caught by the scanners alone, no key needed |
+| `demo/ambiguous-change` | forwards the entire raw ticket row to Slack instead of the specific fields the alert needs - no secret, no new host, no new dependency, no literal PII string in the diff | needs human, but only if Claude actually notices the scope creep - scanners find nothing here, so this one tests the LLM layer, not the deterministic one |
 
 ```bash
 python main.py --base main --head demo/safe-change
 python main.py --base main --head demo/risky-change
+python main.py --base main --head demo/ambiguous-change
 ```
 
 `review/test_pipeline.py` covers the router's decision logic and each scanner against
