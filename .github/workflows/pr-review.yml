@@ -35,4 +35,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Not a secret, just a username - set as a repo variable
+          # (Settings > Secrets and variables > Actions > Variables) to
+          # get a real GitHub review-requested notification on any PR
+          # that needs a human. Optional: leave unset to skip this step.
+          REVIEWER_GITHUB_USERNAME: ${{ vars.REVIEWER_GITHUB_USERNAME }}
         run: python main.py --action

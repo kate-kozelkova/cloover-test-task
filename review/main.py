@@ -17,6 +17,7 @@ import sys
 import yaml
 
 from pipeline import run_review
+from router import TIER_NEEDS_HUMAN
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -74,6 +75,14 @@ def run_action(args):
     gh.post_comment(repo, pr_number, token, result["report_markdown"])
     gh.set_commit_status(repo, sha, token, result["tier"], result["reason"])
     gh.add_label(repo, pr_number, token, result["tier"])
+
+    if result["tier"] == TIER_NEEDS_HUMAN:
+        reviewer = os.environ.get("REVIEWER_GITHUB_USERNAME")
+        if reviewer:
+            try:
+                gh.request_review(repo, pr_number, token, reviewer)
+            except Exception as exc:  # noqa: BLE001 - best-effort, never fails the check
+                print(f"Could not request review from {reviewer}: {exc}", file=sys.stderr)
 
     print(result["report_markdown"])
     sys.exit(0 if result["tier"] == 0 else 1)

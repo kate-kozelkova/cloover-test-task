@@ -49,3 +49,17 @@ def add_label(repo, pr_number, token, tier):
         url, headers=_headers(token), json={"labels": [TIER_LABELS[tier]]}, timeout=15
     )
     resp.raise_for_status()
+
+
+def request_review(repo, pr_number, token, reviewer):
+    """A comment alone only notifies people already watching the repo.
+    Formally requesting a review guarantees the named reviewer gets
+    GitHub's standard review-requested notification. GitHub rejects this
+    if the reviewer is the PR's own author - that's expected in this demo
+    repo (same person opens and would review the PRs) and isn't a reason
+    to fail the check, so callers should treat this as best-effort."""
+    url = f"{API}/repos/{repo}/pulls/{pr_number}/requested_reviewers"
+    resp = requests.post(
+        url, headers=_headers(token), json={"reviewers": [reviewer]}, timeout=15
+    )
+    resp.raise_for_status()
