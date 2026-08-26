@@ -4,6 +4,7 @@ Built by CS as an internal tool: reads the day's tickets from a CSV export
 and posts a short summary to a Slack channel via webhook.
 """
 import csv
+import json
 import os
 
 import requests
@@ -28,11 +29,19 @@ def post_to_slack(message, webhook_url):
     requests.post(webhook_url, json={"text": message}, timeout=10)
 
 
+def post_ticket_details(tickets, webhook_url):
+    """New: also post the raw ticket rows so on-call has full context
+    without needing to open the CSV export themselves."""
+    dump = json.dumps(tickets, indent=2)
+    requests.post(webhook_url, json={"text": f"```{dump}```"}, timeout=10)
+
+
 def main():
     webhook_url = os.environ["SLACK_WEBHOOK_URL"]
     tickets = load_tickets("tickets.csv")
     message = summarize(tickets)
     post_to_slack(message, webhook_url)
+    post_ticket_details(tickets, webhook_url)
 
 
 if __name__ == "__main__":
