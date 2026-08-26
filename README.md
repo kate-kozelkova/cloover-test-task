@@ -59,35 +59,18 @@ vars, so the tests can't drift from what the code actually does.
 Three one-time settings turn this from a demo into something that actually gates
 merges:
 
-1. **Add the API key.** Repo → Settings → Secrets and variables → Actions → New
-   repository secret → `ANTHROPIC_API_KEY`. Without this, the reviewer falls back to
-   the offline mock described above, and nothing can ever auto-merge.
-2. **Make the check block merges.** Repo → Settings → Branches → branch protection
-   rule for `main` → require status checks to pass → add `pr-review/data-safety`.
-   Without this, the check still runs and reports, but nothing stops a PR from being
-   merged by hand regardless of the result.
-3. **(Optional) Name a human to notify.** Settings → Secrets and variables → Actions →
-   Variables tab → New repository variable → `REVIEWER_GITHUB_USERNAME` → your GitHub
-   username. When a PR needs a human, the pipeline formally requests a review from
-   this person - a real GitHub notification, not just a comment someone might miss.
-   Leave it unset to skip this step.
+1. **Add the API key.** Repo -> Settings -> Secrets and variables -> Actions -> New repository secret -> `ANTHROPIC_API_KEY`. Without this, it can never authorize an auto-merge on its own, thanks to the low fixed confidence fixed level. Therefore, offline runs will always show the "needs human" path.
+2. **Make the check block merges.** Repo -> Settings -> Branches -> branch protection rule for `main` -> require status checks to pass -> add `pr-review/data-safety`. Otherwise, the check will still run and report, but nothing will stop a PR from being merged by hand regardless of the result.
+3. **(Optional) Assign a reviewer.** Settings -> Secrets and variables -> Actions -> Variables tab -> New repository variable -> `REVIEWER_GITHUB_USERNAME` -> enter GitHub username. The pipeline formally requests a review from the assigned personn.
 
-Once those are set, every PR triggers `.github/workflows/pr-review.yml` automatically -
-not just the two demo branches above, any PR to this repo. To see it work on a change
-of your own: open a PR (any small edit is enough), then check the PR's **Checks** tab
-or the status row at the bottom of the **Conversation** tab. Within a few seconds
-you'll see:
+Every PR triggers `.github/workflows/pr-review.yml` automatically. To see it work on your own PR: open a PR, then check the PR's **Checks** tab or the status row at the bottom of the **Conversation** tab. After a review, you'll see:
 
-- a comment from the bot with the verdict, Claude's summary, and any findings
-- the `pr-review/data-safety` check, green if it passed or red if it didn't
+- a comment from the bot with the decision, Claude's summary, and findings
+- the `pr-review/data-safety` check, green if passed, red if it didn't
 - a `review:auto-merge` or `review:needs-human` label on the PR
 
-A clean, confident review passes the check, and GitHub's native auto-merge (enable it
-per-PR, or repo-wide in Settings → General) merges it with no one involved - you'll
-watch the PR merge itself. Anything else fails the check and blocks the merge button
-until a human overrides it, with the findings and summary already posted instead of a
-cold diff - and, if step 3 is set, a formal review request waiting in your queue
-instead of just a comment you might miss.
+A clean, confident review passes the check, and GitHub's native auto-merge merges it automatically. Otherwise, the check fails and blocks the merge button
+until a reviewer overrides it, with the findings and summary attached. If step 3 is set, a review request appears in the reviewer's queue.
 
 ## Repo layout
 
