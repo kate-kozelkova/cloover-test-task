@@ -5,7 +5,9 @@ These run first, are cheap, and never call out to a network (other than
 the PR diff already being local). If a scanner itself errors, that's
 treated as a finding upstream - fail closed, never silent.
 """
+import ast
 import re
+import subprocess
 
 from findings import Finding, Severity
 from diffutil import changed_files, iter_added_lines
@@ -161,11 +163,59 @@ def scan_self_modification(diff_text):
     return findings
 
 
-def run_all_scanners(diff_text, config):
+def check_python_syntax(filename, content):
+    """Pure check: does `content` parse as valid Python? An unparseable
+    file will crash the instant it's imported or run - this is the one
+    slice of "does it crash" we can guarantee deterministically, as
+    opposed to logic bugs or bad runtime input, which need either tests
+    (conditional on the builder having written one) or judgment (Claude's
+    opportunistic review) - no static check can promise those."""
+    try:
+        ast.parse(content, filename=filename)
+    except SyntaxError as exc:
+        return Finding(
+            source="scanner:syntax",
+            category="correctness",
+            severity=Severity.HIGH,
+            message=f"Syntax error: {exc.msg} - this file would crash "
+            "immediately on import, before any of its logic runs.",
+            file=filename,
+            line=exc.lineno,
+        )
+    return None
+
+
+def scan_syntax_errors(diff_text, head_ref):
+    """Thin git-shelling wrapper around check_python_syntax. Needs each
+    changed file's full content, not just the diff hunk, so it reads the
+    PR's actual version via `git show` rather than trusting the working
+    tree - in Action mode the working tree is main's checkout, not the
+    PR's (see the workflow's checkout step and scan_self_modification)."""
+    findings = []
+    if not head_ref:
+        return findings
+    for file in changed_files(diff_text):
+        if not file.endswith(".py"):
+            continue
+        result = subprocess.run(
+            ["git", "show", f"{head_ref}:{file}"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            continue  # file was deleted in this PR - nothing to parse
+        finding = check_python_syntax(file, result.stdout)
+        if finding:
+            findings.append(finding)
+    return findings
+
+
+def run_all_scanners(diff_text, config, head_ref=None):
     findings = []
     findings += scan_self_modification(diff_text)
     findings += scan_secrets(diff_text)
     findings += scan_egress(diff_text, config["allowlisted_egress_hosts"])
     findings += scan_dependencies(diff_text, config["allowlisted_dependencies"])
     findings += scan_pii(diff_text)
+    findings += scan_syntax_errors(diff_text, head_ref)
     return findings

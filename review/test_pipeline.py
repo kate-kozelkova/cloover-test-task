@@ -7,6 +7,7 @@ import yaml
 from findings import Finding, Severity
 from router import TIER_AUTO_MERGE, TIER_NEEDS_HUMAN, decide_tier
 from scanners import (
+    check_python_syntax,
     scan_dependencies,
     scan_egress,
     scan_pii,
@@ -100,3 +101,14 @@ def test_scan_self_modification_flags_workflow_edits():
 def test_scan_self_modification_ignores_unrelated_files():
     diff = diff_for("example-tool/app.py", "print('hello')")
     assert scan_self_modification(diff) == []
+
+
+def test_check_python_syntax_catches_broken_file():
+    finding = check_python_syntax("app.py", "def broken(:\n    pass\n")
+    assert finding is not None
+    assert finding.category == "correctness"
+
+
+def test_check_python_syntax_allows_valid_file():
+    finding = check_python_syntax("app.py", "def ok():\n    pass\n")
+    assert finding is None

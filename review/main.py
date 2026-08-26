@@ -44,7 +44,9 @@ def git_diff(base, head):
 def run_local(args):
     diff_text = git_diff(args.base, args.head)
     config = load_config()
-    result = run_review(diff_text, config, api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    result = run_review(
+        diff_text, config, api_key=os.environ.get("ANTHROPIC_API_KEY"), head_ref=args.head
+    )
     print(result["report_markdown"])
     print(f"\n(tier={result['tier']})", file=sys.stderr)
     sys.exit(0 if result["tier"] == 0 else 1)
@@ -68,7 +70,9 @@ def run_action(args):
     diff_text = git_diff(base_ref, head_sha)
 
     config = load_config()
-    result = run_review(diff_text, config, api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    result = run_review(
+        diff_text, config, api_key=os.environ.get("ANTHROPIC_API_KEY"), head_ref=head_sha
+    )
 
     import github_report as gh
 

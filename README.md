@@ -4,8 +4,11 @@
 
 When a PR opens/updates, a set of scanners (`review/scanners.py`) look for included
 credentials, calls to hosts outside the allowed list, unapproved dependencies,
-PII-shaped data such as emails, SSNs, or card numbers, and edits to the review pipeline
-itself (so a PR can't quietly loosen its own gate). Separately, Claude reviews the same
+PII-shaped data such as emails, SSNs, or card numbers, edits to the review pipeline
+itself (so a PR can't quietly loosen its own gate), and changed Python files that don't
+even parse (`ast.parse`) - the one slice of "does it crash" that can be guaranteed
+unconditionally, as opposed to logic bugs or bad runtime input, which no static check
+can promise. Separately, Claude reviews the same
 diff (`review/claude_review.py`) and returns one outcome: a list of findings, a
 confidence score, and a plain summary. The router (`review/router.py`) then makes
 exactly one decision, fail-closed: the PR auto-merges only if there are zero findings
@@ -79,14 +82,14 @@ until a reviewer overrides it, with the findings and summary attached. If step 3
 - **Shared workflow across repos.** To scale the tool, `review/` should be moved into its own repo - then each project repo's workflow becomes a pointer instead of a local copy. 
 - **Staged rollout.** Safe PR merge is still human-controlled (bot only comments and labels). Test it like this for a week or two, then turn on auto-merge on the false-negative rate is reliable.
 - **Auto-fix for minor findings.** Any finding currently routes to a reviewer (e.g., even a small unapproved dependency). A middle ground would be bot commenting with exactly what's wrong, Claude Code fixing and pushing again, so that human only involved after a second failure to further cut the queue.
-- **Crash prevention.** The brief also asks that tools "ideally" don't crash - not built here, since a naive version (run the project's own tests, if any exist, as a second check) only re-runs what the builder could already run locally and only catches what existing tests happen to cover. It's enforcement, not insight, and this repo's own tests never exercised it in a demo - worth another look with a stronger approach (e.g., a basic syntax/import check that applies unconditionally) rather than shipping the naive version.
+- **Logic bugs and bad runtime input.** The syntax check only catches "this file cannot even run" - it says nothing about whether the logic is right or handles edge cases. Closing that gap for real means either running the project's own tests (conditional on the builder having written one, and only as strong as what it covers) or leaning further on Claude's opportunistic judgment. Left as best-effort for now, matching the brief's "ideally" framing for crash risk.
 
 ## Repo layout
 
 ```
 example-tool/        the internal tool being reviewed (CS ticket digest -> Slack)
 review/               the review pipeline
-  scanners.py           deterministic checks, including the self-modification guard
+  scanners.py           deterministic checks: secrets, egress, deps, PII, self-mod, syntax
   claude_review.py       the LLM judgment layer
   router.py               combines both into a decision + renders the report
   pipeline.py               ties the above together (no GitHub-specific I/O)

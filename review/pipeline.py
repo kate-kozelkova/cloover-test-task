@@ -8,11 +8,11 @@ from router import decide_tier, render_report
 from scanners import run_all_scanners
 
 
-def run_review(diff_text, config, api_key=None):
+def run_review(diff_text, config, api_key=None, head_ref=None):
     scan_errored = False
     scanner_findings = []
     try:
-        scanner_findings = run_all_scanners(diff_text, config)
+        scanner_findings = run_all_scanners(diff_text, config, head_ref=head_ref)
     except Exception as exc:  # noqa: BLE001 - deliberately broad, see below
         # A scanner crashing is not "no findings" - it's an unknown, and
         # unknowns fail closed to a human, same as a real finding would.
