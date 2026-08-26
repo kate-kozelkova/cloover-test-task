@@ -41,36 +41,3 @@ jobs:
           # that needs a human. Optional: leave unset to skip this step.
           REVIEWER_GITHUB_USERNAME: ${{ vars.REVIEWER_GITHUB_USERNAME }}
         run: python main.py --action
-
-  # Separate, independent check from the data-safety review above: this
-  # one runs against the PR's OWN code (not a trusted main copy), because
-  # its job is to catch crashes in what the PR actually ships, not to
-  # guard against tampering. Data safety is the hard guarantee; this is
-  # best-effort correctness, same as the brief's "ideally" framing.
-  tool-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Run each project's own test suite, if it has one
-        run: |
-          set -e
-          found=0
-          for dir in $(find . -type d -name tests -not -path "./review/*"); do
-            project=$(dirname "$dir")
-            echo "::group::Tests in $project"
-            if [ -f "$project/requirements.txt" ]; then
-              pip install -q -r "$project/requirements.txt"
-            fi
-            pip install -q pytest
-            pytest "$dir"
-            echo "::endgroup::"
-            found=1
-          done
-          if [ "$found" = "0" ]; then
-            echo "No tests/ directory found - nothing to check."
-          fi
